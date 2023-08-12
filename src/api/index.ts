@@ -64,3 +64,15 @@ export function fetchVerify<T>(token: string) {
     data: { token },
   })
 }
+
+export function Chat<T>(chat_id:string,prompt: string,options?: { conversationId?: string; parentMessageId?: string }) {
+  return post<T>({
+    url: '/chatgtp/v1/chat/completions',
+    data:{
+      chat_id,
+      prompt,
+      parent_message_id:options?.parentMessageId,
+      conversation_id:options?.conversationId
+    }
+  })
+}

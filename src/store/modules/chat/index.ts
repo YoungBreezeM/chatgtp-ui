@@ -1,6 +1,7 @@
 import { defineStore } from 'pinia'
 import { getLocalState, setLocalState } from './helper'
 import { router } from '@/store/router'
+import { v4 } from 'uuid'
 
 export const useChatStore = defineStore('chat-store', {
   state: (): Chat.ChatState => getLocalState(),
@@ -14,7 +15,7 @@ export const useChatStore = defineStore('chat-store', {
     },
 
     getChatByUuid(state: Chat.ChatState) {
-      return (uuid?: number) => {
+      return (uuid?: string) => {
         if (uuid)
           return state.chat.find(item => item.uuid === uuid)?.data ?? []
         return state.chat.find(item => item.uuid === state.active)?.data ?? []
@@ -35,7 +36,7 @@ export const useChatStore = defineStore('chat-store', {
       this.reloadRoute(history.uuid)
     },
 
-    updateHistory(uuid: number, edit: Partial<Chat.History>) {
+    updateHistory(uuid: string, edit: Partial<Chat.History>) {
       const index = this.history.findIndex(item => item.uuid === uuid)
       if (index !== -1) {
         this.history[index] = { ...this.history[index], ...edit }
@@ -75,13 +76,13 @@ export const useChatStore = defineStore('chat-store', {
       }
     },
 
-    async setActive(uuid: number) {
+    async setActive(uuid: string) {
       this.active = uuid
       return await this.reloadRoute(uuid)
     },
 
-    getChatByUuidAndIndex(uuid: number, index: number) {
-      if (!uuid || uuid === 0) {
+    getChatByUuidAndIndex(uuid: string, index: number) {
+      if (!uuid || uuid.length === 0) {
         if (this.chat.length)
           return this.chat[0].data[index]
         return null
@@ -92,10 +93,10 @@ export const useChatStore = defineStore('chat-store', {
       return null
     },
 
-    addChatByUuid(uuid: number, chat: Chat.Chat) {
-      if (!uuid || uuid === 0) {
+    addChatByUuid(uuid: string, chat: Chat.Chat) {
+      if (!uuid || uuid.length === 0) {
         if (this.history.length === 0) {
-          const uuid = Date.now()
+          const uuid = v4()
           this.history.push({ uuid, title: chat.text, isEdit: false })
           this.chat.push({ uuid, data: [chat] })
           this.active = uuid
@@ -118,8 +119,8 @@ export const useChatStore = defineStore('chat-store', {
       }
     },
 
-    updateChatByUuid(uuid: number, index: number, chat: Chat.Chat) {
-      if (!uuid || uuid === 0) {
+    updateChatByUuid(uuid: string, index: number, chat: Chat.Chat) {
+      if (!uuid || uuid.length === 0) {
         if (this.chat.length) {
           this.chat[0].data[index] = chat
           this.recordState()
@@ -134,8 +135,8 @@ export const useChatStore = defineStore('chat-store', {
       }
     },
 
-    updateChatSomeByUuid(uuid: number, index: number, chat: Partial<Chat.Chat>) {
-      if (!uuid || uuid === 0) {
+    updateChatSomeByUuid(uuid: string, index: number, chat: Partial<Chat.Chat>) {
+      if (!uuid || uuid.length === 0) {
         if (this.chat.length) {
           this.chat[0].data[index] = { ...this.chat[0].data[index], ...chat }
           this.recordState()
@@ -150,8 +151,8 @@ export const useChatStore = defineStore('chat-store', {
       }
     },
 
-    deleteChatByUuid(uuid: number, index: number) {
-      if (!uuid || uuid === 0) {
+    deleteChatByUuid(uuid: string, index: number) {
+      if (!uuid || uuid.length === 0) {
         if (this.chat.length) {
           this.chat[0].data.splice(index, 1)
           this.recordState()
@@ -166,8 +167,8 @@ export const useChatStore = defineStore('chat-store', {
       }
     },
 
-    clearChatByUuid(uuid: number) {
-      if (!uuid || uuid === 0) {
+    clearChatByUuid(uuid: string) {
+      if (!uuid || uuid.length === 0) {
         if (this.chat.length) {
           this.chat[0].data = []
           this.recordState()
@@ -182,7 +183,7 @@ export const useChatStore = defineStore('chat-store', {
       }
     },
 
-    async reloadRoute(uuid?: number) {
+    async reloadRoute(uuid?: string) {
       this.recordState()
       await router.push({ name: 'Chat', params: { uuid } })
     },

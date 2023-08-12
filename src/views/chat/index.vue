@@ -12,9 +12,11 @@ import { useUsingContext } from './hooks/useUsingContext'
 import HeaderComponent from './components/Header/index.vue'
 import { HoverButton, SvgIcon } from '@/components/common'
 import { useBasicLayout } from '@/hooks/useBasicLayout'
-import { useChatStore, usePromptStore } from '@/store'
-import { fetchChatAPIProcess } from '@/api'
+import { useChatStore, usePromptStore,useAppStore } from '@/store'
+import { fetchChatAPIProcess,Chat } from '@/api'
 import { t } from '@/locales'
+import { v4 } from 'uuid'
+import { useNotification } from 'naive-ui'
 
 let controller = new AbortController()
 
@@ -25,35 +27,63 @@ const dialog = useDialog()
 const ms = useMessage()
 
 const chatStore = useChatStore()
-
+const appStore =  useAppStore()
 const { isMobile } = useBasicLayout()
 const { addChat, updateChat, updateChatSome, getChatByUuidAndIndex } = useChat()
 const { scrollRef, scrollToBottom, scrollToBottomIfAtBottom } = useScroll()
 const { usingContext, toggleUsingContext } = useUsingContext()
 
-const { uuid } = route.params as { uuid: string }
+let { uuid } = route.params as { uuid: string }
 
-const dataSources = computed(() => chatStore.getChatByUuid(+uuid))
+if (uuid.length ===0){
+ chatStore.addHistory({ title: 'New Chat', uuid: v4(), isEdit: false })
+  if (isMobile.value)
+    appStore.setSiderCollapsed(true)
+  
+}
+const dataSources = computed(() => chatStore.getChatByUuid(uuid))
 const conversationList = computed(() => dataSources.value.filter(item => (!item.inversion && !!item.conversationOptions)))
 
 const prompt = ref<string>('')
 const loading = ref<boolean>(false)
 const inputRef = ref<Ref | null>(null)
-
+const chatEvent = ref<EventSource>()
 // 添加PromptStore
 const promptStore = usePromptStore()
-
+const notification = useNotification()
 // 使用storeToRefs，保证store修改后，联想部分能够重新渲染
 const { promptList: promptTemplate } = storeToRefs<any>(promptStore)
 
 // 未知原因刷新页面，loading 状态不会重置，手动重置
 dataSources.value.forEach((item, index) => {
   if (item.loading)
-    updateChatSome(+uuid, index, { loading: false })
+    updateChatSome(uuid, index, { loading: false })
 })
 
+
 function handleSubmit() {
-  onConversation()
+  let conver: Chat.ConversationRequest = {}
+  dataSources.value.forEach((item, index) => {
+    if (!item.error && !item.loading && item.conversationOptions){
+      conver= item.conversationOptions
+    }
+   
+  })
+
+  Chat(uuid,prompt.value,{conversationId:conver.conversationId,parentMessageId:conver.parentMessageId}).then((res)=>{
+    console.log(res.status)
+    if (res.status === 200){
+        onConversation()
+    }else{
+       notification["warning"]({
+        content: res.message || "服务资源紧张",
+        meta: '服务资源紧张',
+        duration: 2500,
+        keepAliveOnHover: true
+      })
+    }
+  })
+  
 }
 
 async function onConversation() {
@@ -68,7 +98,7 @@ async function onConversation() {
   controller = new AbortController()
 
   addChat(
-    +uuid,
+    uuid,
     {
       dateTime: new Date().toLocaleString(),
       text: message,
@@ -90,7 +120,7 @@ async function onConversation() {
     options = { ...lastContext }
 
   addChat(
-    +uuid,
+    uuid,
     {
       dateTime: new Date().toLocaleString(),
       text: '',
@@ -103,109 +133,105 @@ async function onConversation() {
   )
   scrollToBottom()
 
-  try {
-    let lastText = ''
-    const fetchChatAPIOnce = async () => {
-      await fetchChatAPIProcess<Chat.ConversationResponse>({
-        prompt: message,
-        options,
-        signal: controller.signal,
-        onDownloadProgress: ({ event }) => {
-          const xhr = event.target
-          const { responseText } = xhr
 
-          // Always process the final line
-          const lastIndex = responseText.lastIndexOf('\n', responseText.length - 2)
-          let chunk = responseText
-          if (lastIndex !== -1)
-            chunk = responseText.substring(lastIndex)
-          console.log(responseText)
-          if (responseText === '[DONE]')
-            return
 
-          try {
-            const data = JSON.parse(responseText)
-            updateChat(
-              +uuid,
-              dataSources.value.length - 1,
-              {
-                dateTime: new Date().toLocaleString(),
-                text: lastText + (data.text ?? ''),
-                inversion: false,
-                error: false,
-                loading: true,
-                conversationOptions: { conversationId: data.conversationId, parentMessageId: data.id },
-                requestOptions: { prompt: message, options: { ...options } },
-              },
-            )
-
-            if (openLongReply && data.detail.choices[0].finish_reason === 'length') {
-              options.parentMessageId = data.id
-              lastText = data.text
-              message = ''
-              return fetchChatAPIOnce()
-            }
-
-            scrollToBottomIfAtBottom()
-          }
-          catch (error) {
-            //
-          }
-        },
-      })
-      updateChatSome(+uuid, dataSources.value.length - 1, { loading: false })
-    }
-
-    await fetchChatAPIOnce()
+  if (chatEvent.value == null){
+    chatEvent.value = new EventSource(`/api/chatgtp/event/${uuid}`)
   }
-  catch (error: any) {
-    const errorMessage = error?.message ?? t('common.wrong')
 
-    if (error.message === 'canceled') {
-      updateChatSome(
-        +uuid,
+  chatEvent.value.onmessage = (e) => {
+    if (e.data == "[DONE]"){
+        chatEvent.value?.close()
+        chatEvent.value = undefined
+          return
+          
+    }
+    try {
+      let lastText = ''
+      try {
+        const data = JSON.parse(e.data) 
+        console.log(data.conversation_id)
+        updateChat(
+          uuid,
+          dataSources.value.length - 1,
+          {
+            dateTime: new Date().toLocaleString(),
+            text: lastText + (data.message.content.parts[0] ?? ''),
+            inversion: false,
+            error: false,
+            loading: true,
+            conversationOptions: { conversationId: data.conversation_id, parentMessageId: data.message.id },
+            requestOptions: { prompt: message, options: { ...options } },
+          },
+        )
+
+        if (openLongReply && data.detail.choices[0].finish_reason === 'length') {
+          options.parentMessageId = data.id
+          lastText = data.text
+          message = ''
+          // return fetchChatAPIOnce()
+        }
+
+        scrollToBottomIfAtBottom()
+      }
+      catch (error) {
+        //
+      }
+      updateChatSome(uuid, dataSources.value.length - 1, { loading: false })
+
+
+    }
+    catch (error: any) {
+      const errorMessage = error?.message ?? t('common.wrong')
+
+      if (error.message === 'canceled') {
+        updateChatSome(
+          uuid,
+          dataSources.value.length - 1,
+          {
+            loading: false,
+          },
+        )
+        scrollToBottomIfAtBottom()
+        return
+      }
+
+      const currentChat = getChatByUuidAndIndex(uuid, dataSources.value.length - 1)
+
+      if (currentChat?.text && currentChat.text !== '') {
+        updateChatSome(
+          uuid,
+          dataSources.value.length - 1,
+          {
+            text: `${currentChat.text}\n[${errorMessage}]`,
+            error: false,
+            loading: false,
+          },
+        )
+        return
+      }
+
+      updateChat(
+        uuid,
         dataSources.value.length - 1,
         {
+          dateTime: new Date().toLocaleString(),
+          text: errorMessage,
+          inversion: false,
+          error: true,
           loading: false,
+          conversationOptions: null,
+          requestOptions: { prompt: message, options: { ...options } },
         },
       )
       scrollToBottomIfAtBottom()
-      return
     }
-
-    const currentChat = getChatByUuidAndIndex(+uuid, dataSources.value.length - 1)
-
-    if (currentChat?.text && currentChat.text !== '') {
-      updateChatSome(
-        +uuid,
-        dataSources.value.length - 1,
-        {
-          text: `${currentChat.text}\n[${errorMessage}]`,
-          error: false,
-          loading: false,
-        },
-      )
-      return
+    finally {
+      loading.value = false
     }
+  }
 
-    updateChat(
-      +uuid,
-      dataSources.value.length - 1,
-      {
-        dateTime: new Date().toLocaleString(),
-        text: errorMessage,
-        inversion: false,
-        error: true,
-        loading: false,
-        conversationOptions: null,
-        requestOptions: { prompt: message, options: { ...options } },
-      },
-    )
-    scrollToBottomIfAtBottom()
-  }
-  finally {
-    loading.value = false
-  }
+
 }
 
 async function onRegenerate(index: number) {
@@ -226,7 +252,7 @@ async function onRegenerate(index: number) {
   loading.value = true
 
   updateChat(
-    +uuid,
+    uuid,
     index,
     {
       dateTime: new Date().toLocaleString(),
@@ -257,7 +283,7 @@ async function onRegenerate(index: number) {
           try {
             const data = JSON.parse(chunk)
             updateChat(
-              +uuid,
+              uuid,
               index,
               {
                 dateTime: new Date().toLocaleString(),
@@ -282,14 +308,14 @@ async function onRegenerate(index: number) {
           }
         },
       })
-      updateChatSome(+uuid, index, { loading: false })
+      updateChatSome(uuid, index, { loading: false })
     }
     await fetchChatAPIOnce()
   }
   catch (error: any) {
     if (error.message === 'canceled') {
       updateChatSome(
-        +uuid,
+        uuid,
         index,
         {
           loading: false,
@@ -301,7 +327,7 @@ async function onRegenerate(index: number) {
     const errorMessage = error?.message ?? t('common.wrong')
 
     updateChat(
-      +uuid,
+      uuid,
       index,
       {
         dateTime: new Date().toLocaleString(),
@@ -371,7 +397,7 @@ function handleDelete(index: number) {
     positiveText: t('common.yes'),
     negativeText: t('common.no'),
     onPositiveClick: () => {
-      chatStore.deleteChatByUuid(+uuid, index)
+      chatStore.deleteChatByUuid(uuid, index)
     },
   })
 }
@@ -386,7 +412,7 @@ function handleClear() {
     positiveText: t('common.yes'),
     negativeText: t('common.no'),
     onPositiveClick: () => {
-      chatStore.clearChatByUuid(+uuid)
+      chatStore.clearChatByUuid(uuid)
     },
   })
 }
@@ -470,19 +496,11 @@ onUnmounted(() => {
 
 <template>
   <div class="flex flex-col w-full h-full">
-    <HeaderComponent
-      v-if="isMobile"
-      :using-context="usingContext"
-      @export="handleExport"
-      @handle-clear="handleClear"
-    />
+    <HeaderComponent v-if="isMobile" :using-context="usingContext" @export="handleExport" @handle-clear="handleClear" />
     <main class="flex-1 overflow-hidden">
       <div id="scrollRef" ref="scrollRef" class="h-full overflow-hidden overflow-y-auto">
-        <div
-          id="image-wrapper"
-          class="w-full max-w-screen-xl m-auto dark:bg-[#101014]"
-          :class="[isMobile ? 'p-2' : 'p-4']"
-        >
+        <div id="image-wrapper" class="w-full max-w-screen-xl m-auto dark:bg-[#101014]"
+          :class="[isMobile ? 'p-2' : 'p-4']">
           <template v-if="!dataSources.length">
             <div class="flex items-center justify-center mt-4 text-center text-neutral-300">
               <SvgIcon icon="ri:bubble-chart-fill" class="mr-2 text-3xl" />
@@ -491,17 +509,9 @@ onUnmounted(() => {
           </template>
           <template v-else>
             <div>
-              <Message
-                v-for="(item, index) of dataSources"
-                :key="index"
-                :date-time="item.dateTime"
-                :text="item.text"
-                :inversion="item.inversion"
-                :error="item.error"
-                :loading="item.loading"
-                @regenerate="onRegenerate(index)"
-                @delete="handleDelete(index)"
-              />
+              <Message v-for="(item, index) of dataSources" :key="index" :date-time="item.dateTime" :text="item.text"
+                :inversion="item.inversion" :error="item.error" :loading="item.loading" @regenerate="onRegenerate(index)"
+                @delete="handleDelete(index)" />
               <div class="sticky bottom-0 left-0 flex justify-center">
                 <NButton v-if="loading" type="warning" @click="handleStop">
                   <template #icon>
@@ -535,17 +545,9 @@ onUnmounted(() => {
           </HoverButton>
           <NAutoComplete v-model:value="prompt" :options="searchOptions" :render-label="renderOption">
             <template #default="{ handleInput, handleBlur, handleFocus }">
-              <NInput
-                ref="inputRef"
-                v-model:value="prompt"
-                type="textarea"
-                :placeholder="placeholder"
-                :autosize="{ minRows: 1, maxRows: isMobile ? 4 : 8 }"
-                @input="handleInput"
-                @focus="handleFocus"
-                @blur="handleBlur"
-                @keypress="handleEnter"
-              />
+              <NInput ref="inputRef" v-model:value="prompt" type="textarea" :placeholder="placeholder"
+                :autosize="{ minRows: 1, maxRows: isMobile ? 4 : 8 }" @input="handleInput" @focus="handleFocus"
+                @blur="handleBlur" @keypress="handleEnter" />
             </template>
           </NAutoComplete>
           <NButton type="primary" :disabled="buttonDisabled" @click="handleSubmit">
