@@ -70,10 +70,11 @@ function handleSubmit() {
    
   })
 
-  Chat(uuid,prompt.value,{conversationId:conver.conversationId,parentMessageId:conver.parentMessageId}).then((res)=>{
+  const chatId = v4()
+  Chat(chatId,prompt.value,{conversationId:conver.conversationId,parentMessageId:conver.parentMessageId}).then((res)=>{
     console.log(res.status)
     if (res.status === 200){
-        onConversation()
+        onConversation(chatId)
     }else{
        notification["warning"]({
         content: res.message || "服务资源紧张",
@@ -86,7 +87,7 @@ function handleSubmit() {
   
 }
 
-async function onConversation() {
+async function onConversation(chatId:string) {
   let message = prompt.value
 
   if (loading.value)
@@ -136,7 +137,7 @@ async function onConversation() {
 
 
   if (chatEvent.value == null){
-    chatEvent.value = new EventSource(`/api/chatgtp/event/${uuid}`)
+    chatEvent.value = new EventSource(`/api/chatgtp/event/${chatId}`)
   }
 
   chatEvent.value.onmessage = (e) => {

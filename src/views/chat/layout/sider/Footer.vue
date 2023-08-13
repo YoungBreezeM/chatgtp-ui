@@ -1,10 +1,10 @@
 <script setup lang='ts'>
-import { defineAsyncComponent, ref } from 'vue'
-import { HoverButton, SvgIcon, UserAvatar } from '@/components/common'
+// import { defineAsyncComponent, ref } from 'vue'
+import { UserAvatar } from '@/components/common'
 
-const Setting = defineAsyncComponent(() => import('@/components/common/Setting/index.vue'))
+// const Setting = defineAsyncComponent(() => import('@/components/common/Setting/index.vue'))
 
-const show = ref(false)
+// const show = ref(false)
 </script>
 
 <template>
@@ -12,13 +12,13 @@ const show = ref(false)
     <div class="flex-1 flex-shrink-0 overflow-hidden">
       <UserAvatar />
     </div>
-
+<!-- 
     <HoverButton @click="show = true">
       <span class="text-xl text-[#4f555e] dark:text-white">
         <SvgIcon icon="ri:settings-4-line" />
       </span>
-    </HoverButton>
+    </HoverButton> -->
 
-    <Setting v-if="show" v-model:visible="show" />
+    <!-- <Setting v-if="show" v-model:visible="show" /> -->
   </footer>
 </template>

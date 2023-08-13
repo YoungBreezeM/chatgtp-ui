@@ -6,7 +6,7 @@ import List from './List.vue'
 import Footer from './Footer.vue'
 import { useAppStore, useChatStore } from '@/store'
 import { useBasicLayout } from '@/hooks/useBasicLayout'
-import { PromptStore } from '@/components/common'
+// import { PromptStore } from '@/components/common'
 import {v4} from "uuid"
 const appStore = useAppStore()
 const chatStore = useChatStore()
@@ -80,9 +80,9 @@ watch(
           <List />
         </div>
         <div class="p-4">
-          <NButton block @click="show = true">
+          <!-- <NButton block @click="show = true">
             {{ $t('store.siderButton') }}
-          </NButton>
+          </NButton> -->
         </div>
       </main>
       <Footer />
@@ -91,5 +91,5 @@ watch(
   <template v-if="isMobile">
     <div v-show="!collapsed" class="fixed inset-0 z-40 w-full h-full bg-black/40" @click="handleUpdateCollapsed" />
   </template>
-  <PromptStore v-model:visible="show" />
+  <!-- <PromptStore v-model:visible="show" /> -->
 </template>
