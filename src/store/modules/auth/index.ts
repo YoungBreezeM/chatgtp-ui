@@ -1,5 +1,5 @@
 import { defineStore } from 'pinia'
-import { getToken, removeToken, setToken } from './helper'
+import { getToken, removeToken, setOpenId, setToken } from './helper'
 import { store } from '@/store'
 import { fetchSession } from '@/api'
 
@@ -10,6 +10,7 @@ interface SessionResponse {
 
 export interface AuthState {
   token: string | undefined
+  openId:string |undefined
   session: SessionResponse | null
 }
 
@@ -17,6 +18,7 @@ export const useAuthStore = defineStore('auth-store', {
   state: (): AuthState => ({
     token: getToken(),
     session: null,
+    openId: undefined
   }),
 
   getters: {
@@ -41,7 +43,7 @@ export const useAuthStore = defineStore('auth-store', {
       this.token = token
       setToken(token)
     },
-
+    
     removeToken() {
       this.token = undefined
       removeToken()

@@ -6,6 +6,10 @@ export function getToken() {
   return ss.get(LOCAL_NAME)
 }
 
+export function getOpenId() {
+  return ss.get(LOCAL_NAME)
+}
+
 export function setToken(token: string) {
   return ss.set(LOCAL_NAME, token)
 }

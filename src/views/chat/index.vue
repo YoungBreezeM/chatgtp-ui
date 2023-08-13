@@ -28,6 +28,7 @@ const ms = useMessage()
 
 const chatStore = useChatStore()
 const appStore =  useAppStore()
+
 const { isMobile } = useBasicLayout()
 const { addChat, updateChat, updateChatSome, getChatByUuidAndIndex } = useChat()
 const { scrollRef, scrollToBottom, scrollToBottomIfAtBottom } = useScroll()
@@ -77,8 +78,8 @@ function handleSubmit() {
         onConversation(chatId)
     }else{
        notification["warning"]({
-        content: res.message || "服务资源紧张",
-        meta: '服务资源紧张',
+        content: "操作失败",
+        meta: res.message || "操作失败",
         duration: 2500,
         keepAliveOnHover: true
       })
